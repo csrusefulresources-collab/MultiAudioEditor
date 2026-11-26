@@ -8,7 +8,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import com.multiaudio.editor.MainViewModel
 
-enum class Screen { HOME, SELECTION, EDIT }
+enum class Screen { HOME, SELECTION }
 
 @Composable
 fun AppRoot(viewModel: MainViewModel) {
@@ -19,19 +19,10 @@ fun AppRoot(viewModel: MainViewModel) {
     when (screen) {
         Screen.HOME -> HomeScreen(
             viewModel = viewModel,
-            onOpenSelection = { screen = Screen.SELECTION },
-            onOpenEdit = { screen = Screen.EDIT }
+            onOpenSelection = { screen = Screen.SELECTION }
         )
-        Screen.SELECTION -> PlaceholderScreen(
-            title = "Selection (${viewModel.selectionMode.label})",
-            audio = viewModel.selectedAudio,
-            note = "Yeh screen agle step mein banegi.",
-            onBack = { screen = Screen.HOME }
-        )
-        Screen.EDIT -> PlaceholderScreen(
-            title = "Edit",
-            audio = viewModel.selectedAudio,
-            note = "Yeh screen agle step mein banegi.",
+        Screen.SELECTION -> SelectionScreen(
+            vm = viewModel,
             onBack = { screen = Screen.HOME }
         )
     }

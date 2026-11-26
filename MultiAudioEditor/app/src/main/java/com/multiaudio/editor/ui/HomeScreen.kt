@@ -17,10 +17,12 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -29,14 +31,12 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -50,20 +50,14 @@ import com.multiaudio.editor.formatDuration
 @Composable
 fun HomeScreen(
     viewModel: MainViewModel,
-    onOpenSelection: () -> Unit,
-    onOpenEdit: () -> Unit
+    onOpenSelection: () -> Unit
 ) {
     val context = LocalContext.current
     val snackbar = remember { SnackbarHostState() }
     var showSettings by remember { mutableStateOf(false) }
+    var showEdit by rememberSaveable { mutableStateOf(false) }
 
-    // Show messages from the ViewModel
-    LaunchedEffect(viewModel.message) {
-        viewModel.message?.let {
-            snackbar.showSnackbar(it)
-            viewModel.clearMessage()
-        }
-    }
+    MessageEffect(viewModel, snackbar)
 
     val picker = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenMultipleDocuments()
@@ -82,101 +76,108 @@ fun HomeScreen(
     Scaffold(
         topBar = {
             CenterAlignedTopAppBar(
-                title = {
-                    Text("Multi Audio Editor", fontWeight = FontWeight.Bold)
-                }
+                title = { Text("Multi Audio Editor", fontWeight = FontWeight.Bold) }
             )
         },
         snackbarHost = { SnackbarHost(snackbar) }
     ) { pad ->
-        Column(
-            modifier = Modifier.fillMaxSize().padding(pad).padding(16.dp),
+        LazyColumn(
+            modifier = Modifier.fillMaxSize().padding(pad),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // --- 4 main buttons ---
-            Button(
-                onClick = {
-                    if (viewModel.canImportMore()) {
-                        picker.launch(arrayOf("audio/*"))
-                    } else {
-                        viewModel.showMessage(
-                            "Maximum ${MainViewModel.MAX_AUDIOS} audios import ho sakti hain."
-                        )
-                    }
-                },
-                modifier = Modifier.fillMaxWidth()
-            ) { Text("Multiple Import Audios") }
-
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(
+            item {
+                Button(
                     onClick = {
-                        if (viewModel.selectedAudio == null) {
-                            viewModel.showMessage("Pehle list se koi audio select karein.")
-                        } else onOpenSelection()
+                        if (viewModel.canImportMore()) {
+                            picker.launch(arrayOf("audio/*"))
+                        } else {
+                            viewModel.showMessage(
+                                "Maximum ${MainViewModel.MAX_AUDIOS} audios import ho sakti hain."
+                            )
+                        }
                     },
-                    modifier = Modifier.weight(1f)
-                ) { Text("Selection") }
-
-                OutlinedButton(
-                    onClick = {
-                        if (viewModel.selectedAudio == null) {
-                            viewModel.showMessage("Pehle list se koi audio select karein.")
-                        } else onOpenEdit()
-                    },
-                    modifier = Modifier.weight(1f)
-                ) { Text("Edit") }
-
-                OutlinedButton(
-                    onClick = { showSettings = true },
-                    modifier = Modifier.weight(1f)
-                ) { Text("Settings") }
+                    enabled = !viewModel.isBusy,
+                    modifier = Modifier.fillMaxWidth()
+                ) { Text("Multiple Import Audios") }
             }
 
-            Text(
-                "Imported Audios (${viewModel.audios.size}/${MainViewModel.MAX_AUDIOS})",
-                style = MaterialTheme.typography.titleSmall
-            )
+            item {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(
+                        onClick = {
+                            if (viewModel.selectedAudio == null) {
+                                viewModel.showMessage("Pehle list se koi audio select karein.")
+                            } else onOpenSelection()
+                        },
+                        modifier = Modifier.weight(1f)
+                    ) { Text("Selection") }
 
-            // --- Imported audio list ---
-            if (viewModel.audios.isEmpty()) {
+                    if (showEdit) {
+                        Button(onClick = { showEdit = false }, modifier = Modifier.weight(1f)) { Text("Edit") }
+                    } else {
+                        OutlinedButton(onClick = { showEdit = true }, modifier = Modifier.weight(1f)) { Text("Edit") }
+                    }
+
+                    OutlinedButton(
+                        onClick = { showSettings = true },
+                        modifier = Modifier.weight(1f)
+                    ) { Text("Settings") }
+                }
+            }
+
+            if (viewModel.isBusy) {
+                item {
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                        Text(viewModel.busyText, style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+            }
+
+            if (showEdit) {
+                item { EditPanel(viewModel) }
+            }
+
+            item {
                 Text(
-                    "Abhi koi audio import nahi hui.",
-                    style = MaterialTheme.typography.bodyMedium
+                    "Imported Audios (${viewModel.audios.size}/${MainViewModel.MAX_AUDIOS})",
+                    style = MaterialTheme.typography.titleSmall
                 )
+            }
+
+            if (viewModel.audios.isEmpty()) {
+                item { Text("Abhi koi audio import nahi hui.", style = MaterialTheme.typography.bodyMedium) }
             } else {
-                LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    itemsIndexed(viewModel.audios) { index, audio ->
-                        val selected = viewModel.selectedIndex == index
-                        Card(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { viewModel.selectAudio(index) },
-                            border = if (selected)
-                                BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null,
-                            colors = CardDefaults.cardColors(
-                                containerColor = if (selected)
-                                    MaterialTheme.colorScheme.primaryContainer
-                                else MaterialTheme.colorScheme.surfaceVariant
+                itemsIndexed(viewModel.audios) { index, audio ->
+                    val selected = viewModel.selectedIndex == index
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { viewModel.selectAudio(index) },
+                        border = if (selected) BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null,
+                        colors = CardDefaults.cardColors(
+                            containerColor = if (selected) MaterialTheme.colorScheme.primaryContainer
+                            else MaterialTheme.colorScheme.surfaceVariant
+                        )
+                    ) {
+                        Column(Modifier.padding(12.dp)) {
+                            Text(
+                                audio.name,
+                                style = MaterialTheme.typography.titleMedium,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis
                             )
-                        ) {
-                            Column(Modifier.padding(12.dp)) {
+                            Text(
+                                "Duration: ${formatDuration(audio.durationMs)}",
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                            if (selected) {
                                 Text(
-                                    audio.name,
-                                    style = MaterialTheme.typography.titleMedium,
-                                    maxLines = 2,
-                                    overflow = TextOverflow.Ellipsis
+                                    "Selected",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.primary
                                 )
-                                Text(
-                                    "Duration: ${formatDuration(audio.durationMs)}",
-                                    style = MaterialTheme.typography.bodyMedium
-                                )
-                                if (selected) {
-                                    Text(
-                                        "Selected",
-                                        style = MaterialTheme.typography.labelMedium,
-                                        color = MaterialTheme.colorScheme.primary
-                                    )
-                                }
                             }
                         }
                     }
@@ -209,30 +210,19 @@ private fun SettingsDialog(
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("Selection By", style = MaterialTheme.typography.titleSmall)
-                ExposedDropdownMenuBox(
-                    expanded = expanded,
-                    onExpandedChange = { expanded = it }
-                ) {
+                ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = it }) {
                     OutlinedTextField(
                         value = current.label,
                         onValueChange = {},
                         readOnly = true,
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
-                        modifier = Modifier
-                            .menuAnchor()
-                            .fillMaxWidth()
+                        modifier = Modifier.menuAnchor().fillMaxWidth()
                     )
-                    ExposedDropdownMenu(
-                        expanded = expanded,
-                        onDismissRequest = { expanded = false }
-                    ) {
+                    ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
                         SelectionMode.values().forEach { mode ->
                             DropdownMenuItem(
                                 text = { Text(mode.label) },
-                                onClick = {
-                                    onChange(mode)
-                                    expanded = false
-                                }
+                                onClick = { onChange(mode); expanded = false }
                             )
                         }
                     }
