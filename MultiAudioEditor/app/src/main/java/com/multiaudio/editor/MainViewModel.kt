@@ -60,9 +60,18 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         private set
     var isPlaying by mutableStateOf(false)
         private set
+    /** 0f..1f while importing, -1f when no import is running. */
+    var importProgress by mutableStateOf(-1f)
+        private set
+    var importLabel by mutableStateOf("")
+        private set
 
     val selectedAudio: AudioItem?
         get() = audios.getOrNull(selectedIndex ?: -1)
+
+    val importing: Boolean get() = importProgress >= 0f
+    /** True when at least one audio has been edited and not saved yet. */
+    val hasEdits: Boolean get() = audios.any { it.edited }
 
     fun clearMessage() { message = null }
     fun showMessage(text: String) { message = text }
@@ -100,19 +109,25 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
         isBusy = true
         busyText = "Audio import ho rahi hai..."
+        importProgress = 0f
         viewModelScope.launch {
             val ctx = getApplication<Application>()
             val added = mutableListOf<AudioItem>()
             val failed = mutableListOf<String>()
-            for (u in toAdd) {
+            for ((i, u) in toAdd.withIndex()) {
                 val name = withContext(Dispatchers.IO) { AudioUtils.queryName(ctx, u) }
+                importLabel = "(${i + 1}/${toAdd.size}) $name"
+                importProgress = i.toFloat() / toAdd.size
                 try {
-                    val pcm = withContext(Dispatchers.IO) { AudioDecoder.decode(ctx, u) }
+                    val pcm = withContext(Dispatchers.IO) {
+                        AudioDecoder.decode(ctx, u) { p -> importProgress = (i + p) / toAdd.size }
+                    }
                     added += AudioItem(nextId++, u, name, pcm, 0L, pcm.durationMs)
                 } catch (t: Throwable) {
                     failed += name
                 }
             }
+            importProgress = -1f
             audios = audios + added
             val parts = mutableListOf<String>()
             if (skipped > 0) parts += "Limit $MAX_AUDIOS hai, $skipped audio(s) import nahi hui."
@@ -249,7 +264,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 val idx = audios.indexOfFirst { it.id == a.id }
                 if (idx >= 0) {
                     audios = audios.toMutableList().also {
-                        it[idx] = it[idx].copy(pcm = res.pcm, startMs = res.startMs, endMs = res.endMs)
+                        it[idx] = it[idx].copy(
+                            pcm = res.pcm, startMs = res.startMs, endMs = res.endMs, edited = true
+                        )
                     }
                 }
                 if (res.clip != null) clipboard = res.clip
@@ -306,6 +323,21 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     // ---------------- Save ----------------
 
+    /** Selection screen "Save": markers are already stored, just confirm and return home. */
+    fun confirmSelection() {
+        stopPlayback()
+        message = "Selection save ho gayi."
+    }
+
+    /** Home "Save" button: only allowed once editing is finished. */
+    fun canSave(): Boolean {
+        if (isBusy) { message = "Editing abhi jari hai, thora intezar karein."; return false }
+        val a = selectedAudio
+        if (a == null) { message = "Pehle list se audio select karein."; return false }
+        if (!a.edited) { message = "Is audio par abhi editing mukammal nahi hui."; return false }
+        return true
+    }
+
     fun suggestedSaveName(): String {
         val n = selectedAudio?.name ?: "audio"
         return n.substringBeforeLast('.', n) + "_edited.wav"
@@ -321,6 +353,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             val ctx = getApplication<Application>()
             message = try {
                 withContext(Dispatchers.IO) { WavWriter.write(ctx, uri, a.pcm) }
+                audios = audios.map { if (it.id == a.id && it.pcm === a.pcm) it.copy(edited = false) else it }
                 "Save ho gaya (WAV)."
             } catch (t: Throwable) {
                 "Save fail: ${t.message ?: t.javaClass.simpleName}"

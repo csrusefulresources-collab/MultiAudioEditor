@@ -5,3 +5,5 @@ AGP 8.5.2, Kotlin 2.0.20, Gradle 8.9, JDK 17.
 Step 1: Home, Settings (Typing/Marker), multi import (max 4), list, tap-to-select.
 Step 2: Selection screen (Marker + Typing), playback (Play/Pause, +-10s), Edit panel
         (Trim, Delete, Copy, Cut, Paste, Echo presets + Custom, stereo), Save (WAV).
+Step 3 (v0.3): Selection "Save" returns to Home; import progress bar with %;
+        empty-list heading removed; Home "Save" button (appears after editing) exports WAV.

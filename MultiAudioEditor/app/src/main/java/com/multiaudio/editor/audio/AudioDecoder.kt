@@ -23,7 +23,7 @@ object AudioDecoder {
         fun toArray(): ShortArray = data.copyOf(size)
     }
 
-    fun decode(context: Context, uri: Uri): PcmAudio {
+    fun decode(context: Context, uri: Uri, onProgress: (Float) -> Unit = {}): PcmAudio {
         val extractor = MediaExtractor()
         extractor.setDataSource(context, uri, null)
 
@@ -48,6 +48,10 @@ object AudioDecoder {
         var channels = if (format.containsKey(MediaFormat.KEY_CHANNEL_COUNT))
             format.getInteger(MediaFormat.KEY_CHANNEL_COUNT) else 2
 
+        val durationUs = if (format.containsKey(MediaFormat.KEY_DURATION))
+            format.getLong(MediaFormat.KEY_DURATION) else 0L
+        var lastPct = -1
+
         val codec = MediaCodec.createDecoderByType(format.getString(MediaFormat.KEY_MIME)!!)
         val list = ShortList()
         try {
@@ -67,7 +71,15 @@ object AudioDecoder {
                             codec.queueInputBuffer(inIdx, 0, 0, 0, MediaCodec.BUFFER_FLAG_END_OF_STREAM)
                             inputDone = true
                         } else {
-                            codec.queueInputBuffer(inIdx, 0, size, extractor.sampleTime, 0)
+                            val st = extractor.sampleTime
+                            codec.queueInputBuffer(inIdx, 0, size, st, 0)
+                            if (durationUs > 0 && st >= 0) {
+                                val pct = ((st * 100) / durationUs).toInt().coerceIn(0, 99)
+                                if (pct != lastPct) {
+                                    lastPct = pct
+                                    onProgress(pct / 100f)
+                                }
+                            }
                             extractor.advance()
                         }
                     }

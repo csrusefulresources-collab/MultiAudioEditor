@@ -54,10 +54,6 @@ fun SelectionScreen(vm: MainViewModel, onBack: () -> Unit) {
 
     DisposableEffect(Unit) { onDispose { vm.stopPlayback() } }
 
-    val saveLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.CreateDocument("audio/wav")
-    ) { uri -> if (uri != null) vm.saveWav(uri) }
-
     val audio = vm.selectedAudio
 
     Scaffold(
@@ -146,8 +142,10 @@ fun SelectionScreen(vm: MainViewModel, onBack: () -> Unit) {
                 Spacer(Modifier.padding(2.dp))
 
                 Button(
-                    onClick = { saveLauncher.launch(vm.suggestedSaveName()) },
-                    enabled = !vm.isBusy,
+                    onClick = {
+                        vm.confirmSelection()
+                        onBack()
+                    },
                     modifier = Modifier.fillMaxWidth()
                 ) { Text("Save") }
             }

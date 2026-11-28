@@ -7,6 +7,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -73,6 +74,11 @@ fun HomeScreen(
         viewModel.importAudios(uris)
     }
 
+    // Final save of the edited audio (asks where to store the WAV file)
+    val saveLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("audio/wav")
+    ) { uri -> if (uri != null) viewModel.saveWav(uri) }
+
     Scaffold(
         topBar = {
             CenterAlignedTopAppBar(
@@ -83,23 +89,34 @@ fun HomeScreen(
     ) { pad ->
         LazyColumn(
             modifier = Modifier.fillMaxSize().padding(pad),
-            contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
+            contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
+            // Import button + (after editing) Save button on its right
             item {
-                Button(
-                    onClick = {
-                        if (viewModel.canImportMore()) {
-                            picker.launch(arrayOf("audio/*"))
-                        } else {
-                            viewModel.showMessage(
-                                "Maximum ${MainViewModel.MAX_AUDIOS} audios import ho sakti hain."
-                            )
-                        }
-                    },
-                    enabled = !viewModel.isBusy,
-                    modifier = Modifier.fillMaxWidth()
-                ) { Text("Multiple Import Audios") }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(
+                        onClick = {
+                            if (viewModel.canImportMore()) {
+                                picker.launch(arrayOf("audio/*"))
+                            } else {
+                                viewModel.showMessage(
+                                    "Maximum ${MainViewModel.MAX_AUDIOS} audios import ho sakti hain."
+                                )
+                            }
+                        },
+                        enabled = !viewModel.isBusy,
+                        modifier = Modifier.weight(1f)
+                    ) { Text("Multiple Import Audios") }
+
+                    if (viewModel.hasEdits) {
+                        Button(
+                            onClick = {
+                                if (viewModel.canSave()) saveLauncher.launch(viewModel.suggestedSaveName())
+                            }
+                        ) { Text("Save") }
+                    }
+                }
             }
 
             item {
@@ -126,7 +143,28 @@ fun HomeScreen(
                 }
             }
 
-            if (viewModel.isBusy) {
+            // Import progress (with percentage) or generic busy bar
+            if (viewModel.importing) {
+                item {
+                    val p = viewModel.importProgress.coerceIn(0f, 1f)
+                    Card(Modifier.fillMaxWidth()) {
+                        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Text(
+                                "Importing ${viewModel.importLabel}",
+                                style = MaterialTheme.typography.bodyMedium,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            LinearProgressIndicator(progress = { p }, modifier = Modifier.fillMaxWidth())
+                            Text(
+                                "${(p * 100).toInt()}%",
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
+            } else if (viewModel.isBusy) {
                 item {
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
@@ -139,16 +177,14 @@ fun HomeScreen(
                 item { EditPanel(viewModel) }
             }
 
-            item {
-                Text(
-                    "Imported Audios (${viewModel.audios.size}/${MainViewModel.MAX_AUDIOS})",
-                    style = MaterialTheme.typography.titleSmall
-                )
-            }
-
-            if (viewModel.audios.isEmpty()) {
-                item { Text("Abhi koi audio import nahi hui.", style = MaterialTheme.typography.bodyMedium) }
-            } else {
+            // Heading + list only when something is imported
+            if (viewModel.audios.isNotEmpty()) {
+                item {
+                    Text(
+                        "Imported Audios (${viewModel.audios.size}/${MainViewModel.MAX_AUDIOS})",
+                        style = MaterialTheme.typography.titleSmall
+                    )
+                }
                 itemsIndexed(viewModel.audios) { index, audio ->
                     val selected = viewModel.selectedIndex == index
                     Card(

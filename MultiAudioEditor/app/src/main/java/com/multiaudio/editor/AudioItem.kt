@@ -9,7 +9,8 @@ data class AudioItem(
     val name: String,
     val pcm: PcmAudio,
     val startMs: Long,
-    val endMs: Long
+    val endMs: Long,
+    val edited: Boolean = false
 ) {
     val durationMs: Long get() = pcm.durationMs
 }
